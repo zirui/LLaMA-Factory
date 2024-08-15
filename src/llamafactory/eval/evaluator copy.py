@@ -64,37 +64,7 @@ class Evaluator:
         self.model = load_model(self.tokenizer, self.model_args, finetuning_args)
         self.eval_template = get_eval_template(self.eval_args.lang)
         self.choice_inputs = [self.tokenizer.encode(ch, add_special_tokens=False)[-1] for ch in CHOICES]
-    
-    def activate_dst(self):
-        self.model.dst_activate(init=0.25)
-        # Load parameters
-        checkpoint = self.model_args.model_name_or_path
-        if os.path.isfile(os.path.join(checkpoint, "model.safetensors.index.json")):
-            # Load safetensors
-            state_dict = {}
-            for file_id in range(1, 4):
-                file_path = os.path.join(checkpoint, f"model-0000{file_id}-of-00003.safetensors")
-                if os.path.isfile(file_path):
-                    state_dict.update(load_safetensors(file_path))
-        #print('state_dict: ', state_dict.keys())
-        filtered_state_dict = self.filter_state_dict(self.model, state_dict)
-        self.model.load_state_dict(filtered_state_dict, strict=False)
-        #Open the mask when doing the evaluation
-        if self.model_args.dst_mode == 'joint':
-            print("****** DST w/ masks on ******")
-            self.model.dst_activate(
-                dst_distill=False,
-                dst_eval=True,
-                en_dst=True,en_dst_mask=True,
-                en_oracle_mask=False, dst_ratio=self.model_args.dst_ratio)
-        elif self.model_args.dst_mode == 'oracle':
-            print("****** DST w/ oracle masks on ******")
-            self.model.dst_activate(
-                dst_distill=False,
-                dst_eval=True,
-                en_dst=True,en_dst_mask=False,
-                en_oracle_mask=True, dst_ratio=self.model_args.dst_ratio)
-    
+
     def filter_state_dict(self, model, state_dict):
         model_dict = model.state_dict()
         filtered_dict = {}
@@ -124,7 +94,28 @@ class Evaluator:
 
         with open(mapping, "r", encoding="utf-8") as f:
             categorys: Dict[str, Dict[str, str]] = json.load(f)
-            
+        
+        self.model.dst_activate(init=0.25)
+        # Load parameters
+        checkpoint = self.model_args.model_name_or_path
+        if os.path.isfile(os.path.join(checkpoint, "model.safetensors.index.json")):
+            # Load safetensors
+            state_dict = {}
+            for file_id in range(1, 4):
+                file_path = os.path.join(checkpoint, f"model-0000{file_id}-of-00003.safetensors")
+                if os.path.isfile(file_path):
+                    state_dict.update(load_safetensors(file_path))
+        #print('state_dict: ', state_dict.keys())
+        filtered_state_dict = self.filter_state_dict(self.model, state_dict)
+        self.model.load_state_dict(filtered_state_dict, strict=False)
+        #Open the mask when doing the evaluation
+        if self.model_args.dst_mode == 'joint':
+            print("****** DST w/ masks on ******")
+            self.model.dst_activate(
+                dst_distill=False,
+                dst_eval=True,
+                en_dst=True,en_dst_mask=True,
+                en_oracle_mask=False, dst_ratio=self.model_args.dst_ratio)
         category_corrects = {subj: np.array([], dtype="bool") for subj in SUBJECTS}
         pbar = tqdm(categorys.keys(), desc="Processing subjects", position=0)
         results = {}
@@ -190,6 +181,4 @@ class Evaluator:
 
 
 def run_eval() -> None:
-    evaluator = Evaluator()  # 只实例化一次Evaluator
-    evaluator.activate_dst()  # 激活DST
-    evaluator.eval()  # 开始评估
+    Evaluator().eval()

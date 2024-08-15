@@ -98,7 +98,8 @@ def main():
                 ).format(
                     nnodes=os.environ.get("NNODES", "1"),
                     node_rank=os.environ.get("RANK", "0"),
-                    nproc_per_node=os.environ.get("NPROC_PER_NODE", str(get_device_count())),
+                    #nproc_per_node=os.environ.get("NPROC_PER_NODE", str(get_device_count())),
+                    nproc_per_node=os.environ.get("NPROC_PER_NODE", "8"),
                     master_addr=master_addr,
                     master_port=master_port,
                     file_name=launcher.__file__,

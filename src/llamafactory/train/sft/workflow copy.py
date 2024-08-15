@@ -25,9 +25,6 @@ from ...model import load_model, load_tokenizer
 from ..trainer_utils import create_modelcard_and_push
 from .metric import ComputeAccuracy, ComputeSimilarity, eval_logit_processor
 from .trainer import CustomSeq2SeqTrainer
-import torch
-import os
-from safetensors.torch import load_file as load_safetensors
 
 
 if TYPE_CHECKING:
@@ -35,13 +32,6 @@ if TYPE_CHECKING:
 
     from ...hparams import DataArguments, FinetuningArguments, GeneratingArguments, ModelArguments
 
-def filter_state_dict(model, state_dict):
-    model_dict = model.state_dict()
-    filtered_dict = {}
-    for k, v in state_dict.items():
-        if k in model_dict and model_dict[k].shape == v.shape:
-            filtered_dict[k] = v
-    return filtered_dict
 
 def run_sft(
     model_args: "ModelArguments",
@@ -81,24 +71,6 @@ def run_sft(
         metric_module["compute_metrics"] = ComputeAccuracy()
         metric_module["preprocess_logits_for_metrics"] = eval_logit_processor
 
-    # Added for DST
-    if model_args.dst_mode in ['distill', 'joint', 'mask', 'oracle', 'structural']:
-        model.dst_activate(init=0.25)
-
-    # Load parameters
-    # print("DST: model.load_state_dict; strict=False")
-    checkpoint = model_args.model_name_or_path
-    if os.path.isfile(os.path.join(checkpoint, "model.safetensors.index.json")):
-        # Load safetensors
-        state_dict = {}
-        for file_id in range(1, 4):
-            file_path = os.path.join(checkpoint, f"model-0000{file_id}-of-00003.safetensors")
-            if os.path.isfile(file_path):
-                state_dict.update(load_safetensors(file_path))
-    #print('state_dict: ', state_dict.keys())
-    filtered_state_dict = filter_state_dict(model, state_dict)
-    model.load_state_dict(filtered_state_dict, strict=False)
-    
     # Initialize our Trainer
     trainer = CustomSeq2SeqTrainer(
         model=model,
@@ -116,27 +88,6 @@ def run_sft(
     gen_kwargs["eos_token_id"] = [tokenizer.eos_token_id] + tokenizer.additional_special_tokens_ids
     gen_kwargs["pad_token_id"] = tokenizer.pad_token_id
     gen_kwargs["logits_processor"] = get_logits_processor()
-    
-    # DST Arguments
-    if model_args.dst_mode == 'distill':
-        oracle_mask = True
-        print("****** DST Distill w/ oracle masks: {} *******".format(oracle_mask))
-        # freeze model parameters
-        for p in model.parameters(): p.requires_grad = False
-        model.dst_activate(
-            dst_distill=True,
-            dst_eval=False,
-            en_dst=True, en_dst_mask=False,
-            en_oracle_mask=oracle_mask, dst_ratio=model_args.dst_ratio)
-        for name, param in model.named_parameters():
-            if param.requires_grad: print(name)
-    elif model_args.dst_mode == 'joint':
-        print("****** DST joint *******")
-        model.dst_activate(
-            dst_distill=True,
-            dst_eval=True,
-            en_dst=True, en_dst_mask=True,
-            en_oracle_mask=False, dst_ratio=model_args.dst_ratio)
 
     # Training
     if training_args.do_train:
@@ -153,22 +104,6 @@ def run_sft(
 
     # Evaluation
     if training_args.do_eval:
-        # test dynamic sparse
-        if model_args.dst_mode == 'joint':
-            print("****** DST w/ masks on ******")
-            model.dst_activate(
-                dst_distill=False,
-                dst_eval=True,
-                en_dst=True,en_dst_mask=True,
-                en_oracle_mask=False, dst_ratio=model_args.dst_ratio)
-        elif model_args.dst_mode == 'oracle':
-            print("****** DST w/ oracle masks on ******")
-            model.dst_activate(
-                dst_distill=False,
-                dst_eval=True,
-                en_dst=True,en_dst_mask=False,
-                en_oracle_mask=True, dst_ratio=model_args.dst_ratio)
-
         metrics = trainer.evaluate(metric_key_prefix="eval", **gen_kwargs)
         if training_args.predict_with_generate:  # eval_loss will be wrong if predict_with_generate is enabled
             metrics.pop("eval_loss", None)

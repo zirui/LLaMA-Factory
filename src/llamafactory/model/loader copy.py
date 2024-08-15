@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, TypedDict
 
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForVision2Seq, AutoProcessor, AutoTokenizer
-from .llama import LlamaForCausalLM
 from trl import AutoModelForCausalLMWithValueHead
 
 from ..extras.logging import get_logger
@@ -151,9 +150,7 @@ def load_model(
         elif model_args.train_from_scratch:
             model = AutoModelForCausalLM.from_config(config)
         else:
-            #model = AutoModelForCausalLM.from_pretrained(**init_kwargs) #TODO: add the self-define model
-            model = LlamaForCausalLM.from_pretrained(**init_kwargs)
-            model.enable_input_require_grads()
+            model = AutoModelForCausalLM.from_pretrained(**init_kwargs) #TODO: add the self-define model
 
         if model_args.mixture_of_depths == "convert":
             model = convert_pretrained_model_to_mod(model, config, model_args)

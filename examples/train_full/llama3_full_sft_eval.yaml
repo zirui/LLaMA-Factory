@@ -1,0 +1,18 @@
+### model
+model_name_or_path: saves/llama2-7b-joint-1.0
+dst_mode: joint
+dst_ratio: 1.0
+### method
+finetuning_type: full
+
+### dataset
+task: mmlu_test  # choices: [mmlu_test, ceval_validation, cmmlu_test]
+template: fewshot
+lang: en
+n_shot: 5
+
+### output
+save_dir: saves/llama2-7b-joint-1.0-eval-mmlu
+
+### eval
+batch_size: 4

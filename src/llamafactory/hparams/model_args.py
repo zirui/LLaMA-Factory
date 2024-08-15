@@ -221,6 +221,15 @@ class ModelArguments:
         default=False,
         metadata={"help": "For debugging purposes, print the status of the parameters in the model."},
     )
+    
+# Add dst parameters
+    dst_mode: str = field(
+        default=None,
+    )
+    dst_ratio: float = field(
+        default=0.25, # TODO: change this to 0.25
+    )
+
 
     def __post_init__(self):
         self.compute_dtype: Optional["torch.dtype"] = None
