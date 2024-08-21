@@ -1,5 +1,5 @@
 ### model
-model_name_or_path: saves/llama2-7b-joint-1.0
+model_name_or_path: saves/llama2-7b-wo3layers-after-joint-1.0
 dst_mode: joint
 dst_ratio: 1.0
 ### method
@@ -12,7 +12,7 @@ lang: en
 n_shot: 5
 
 ### output
-save_dir: saves/llama2-7b-joint-1.0-eval-mmlu
+save_dir: saves/llama2-7b-wo3layers-after-1.0-mmlu
 
 ### eval
 batch_size: 4

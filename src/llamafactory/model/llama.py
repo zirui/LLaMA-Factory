@@ -311,7 +311,8 @@ class LlamaAttention(nn.Module):
         self.en_dst_mask = False
         self.en_oracle_mask = False
         self.dst_distill = False
-        self.dst_ratio = 0.25
+        self.dst_ratio = None
+        #print(self.dst_ratio)
         self.profiling=False
         self.layer_idx=None
         self._init_rope()
@@ -367,7 +368,7 @@ class LlamaAttention(nn.Module):
             )
             # Add the appr_rotary
             self.appr_rotary_emb = LlamaRotaryEmbedding(
-                int(self.head_dim*self.dst_ratio),
+                int(self.head_dim*0.25),
                 max_position_embeddings=self.max_position_embeddings,
                 base=self.rope_theta,
             )
@@ -455,6 +456,22 @@ class LlamaAttention(nn.Module):
         
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
+        
+        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
+        attn_weights = attn_weights / math.sqrt(self.head_dim)
+        
+        if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
+            raise ValueError(
+                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
+                f" {attn_weights.size()}"
+            )
+        if attention_mask is not None:
+            if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+                raise ValueError(
+                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+                )
+            attn_weights = attn_weights + attention_mask
+        
         # Add the dst
         if self.en_dst:
             device = _h.device
@@ -472,7 +489,7 @@ class LlamaAttention(nn.Module):
             appr_key = repeat_kv(appr_key, self.num_key_value_groups)
             # Add the dst appr attn
             appr_attn = torch.matmul(appr_query, appr_key.transpose(2, 3))
-            logits = appr_attn
+            appr_attn = appr_attn / math.sqrt(self.head_dim)
             # add the mask
             if attention_mask is not None:
                 if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
@@ -480,23 +497,20 @@ class LlamaAttention(nn.Module):
                         f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
                     )
             appr_attn = appr_attn + attention_mask
-
+            logits = appr_attn
+            # print('appr_attn:',appr_attn.shape[-1])
+            # print('kv_seq_len:',kv_seq_len)
             if self.en_dst_mask:
-                appr_attn = appr_attn / math.sqrt(self.head_dim)
                 #print('******dst_ratio is:******', self.dst_ratio)
-                topk_v, _ = torch.topk(appr_attn, int(appr_attn.shape[-1]* self.dst_ratio), dim=-1)
+                topk_v, _ = torch.topk(appr_attn, int(kv_seq_len* self.dst_ratio), dim=-1)
                 topk_th = topk_v[:,:,:,-1].unsqueeze(-1).expand_as(appr_attn)
                 appr_m = torch.gt(appr_attn, topk_th).to(torch.float)   
     
             if self.en_oracle_mask:
-                attention_scores = torch.matmul(query_states, key_states.transpose(2, 3))
-                attention_scores = attention_scores / math.sqrt(self.head_dim)
                 #print('******dst_ratio is:******', self.dst_ratio)
-                topk_v, _ = torch.topk(attention_scores, int(attention_scores.shape[-1] * self.dst_ratio), dim=-1)
-                topk_th = topk_v[:,:,:,-1].unsqueeze(-1).expand_as(attention_scores)
-                oracle_m = torch.gt(attention_scores, topk_th).to(torch.float)
-        
-        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3))
+                topk_v, _ = torch.topk(attn_weights, int(kv_seq_len * self.dst_ratio), dim=-1)
+                topk_th = topk_v[:,:,:,-1].unsqueeze(-1).expand_as(attn_weights)
+                oracle_m = torch.gt(attn_weights, topk_th).to(torch.float)
         
         if self.en_dst:
             targets = attn_weights
@@ -508,23 +522,9 @@ class LlamaAttention(nn.Module):
                 
             if self.en_oracle_mask and apply_mask:
                 attn_weights += (1.0 - oracle_m) * -10000.0
-                #attn_weights = torch.mul(attn_weights, oracle_m)
                 #attn_weights = torch.mul(attn_weights, oracle_m) + torch.mul(appr_attn, 1-oracle_m)
 
-        attn_weights = attn_weights / math.sqrt(self.head_dim)
         
-        if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
-            raise ValueError(
-                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
-                f" {attn_weights.size()}"
-            )
-        if attention_mask is not None:
-            if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
-                raise ValueError(
-                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
-                )
-            attn_weights = attn_weights + attention_mask
-
         # upcast attention to fp32
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
         attn_output = torch.matmul(attn_weights, value_states)
@@ -1261,7 +1261,6 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
                     dst_loss_layer = dst_loss_fct(p[0], p[1])
                     dst_loss_list.append(dst_loss_layer)
                 dst_loss = sum(dst_loss_list) / len(dst_loss_list)
-                #print("dst_loss:", dst_loss)
             else:
                 dst_loss = None
             logits = self.lm_head(hidden_states)
