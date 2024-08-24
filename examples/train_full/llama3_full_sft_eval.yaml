@@ -1,7 +1,7 @@
 ### model
-model_name_or_path: saves/llama2-7b-wo3layers-after-joint-1.0
+model_name_or_path: saves-0.5/llama2-7b-wo3layers-joint-0.25
 dst_mode: joint
-dst_ratio: 1.0
+dst_ratio: 0.25
 ### method
 finetuning_type: full
 
@@ -12,7 +12,7 @@ lang: en
 n_shot: 5
 
 ### output
-save_dir: saves/llama2-7b-wo3layers-after-1.0-mmlu
+save_dir: saves-0.5/llama2-7b-wo3layers-joint-0.25-mmlu
 
 ### eval
 batch_size: 4

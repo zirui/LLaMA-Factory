@@ -25,7 +25,7 @@ def fit(n, d, eps=0.5, scale=None, dist='binary'):
         np_sparse_matrix = np.random.binomial(1, float(1 / s), size=(d, k)) / math.sqrt(s)
         signs = np.random.binomial(1, 0.5, size=(d, k)) * 2 - 1
         np_sparse_matrix = np_sparse_matrix * signs
-    return torch.from_numpy(np_sparse_matrix).to(torch.float) # 改为bfloat16试试？
+    return torch.from_numpy(np_sparse_matrix).to(torch.float)
 
 def calc_min_dim(n_samples, eps):
     if eps <= 0.0 or eps >= 1:

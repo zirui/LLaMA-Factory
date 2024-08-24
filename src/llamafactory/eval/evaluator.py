@@ -66,7 +66,7 @@ class Evaluator:
         self.choice_inputs = [self.tokenizer.encode(ch, add_special_tokens=False)[-1] for ch in CHOICES]
     
     def activate_dst(self):
-        self.model.dst_activate(init=0.25)
+        self.model.dst_activate(init=0.5)
         # Load parameters
         checkpoint = self.model_args.model_name_or_path
         if os.path.isfile(os.path.join(checkpoint, "model.safetensors.index.json")):
@@ -190,6 +190,6 @@ class Evaluator:
 
 
 def run_eval() -> None:
-    evaluator = Evaluator()  # 只实例化一次Evaluator
-    evaluator.activate_dst()  # 激活DST
-    evaluator.eval()  # 开始评估
+    evaluator = Evaluator() 
+    evaluator.activate_dst()
+    evaluator.eval()

@@ -324,10 +324,10 @@ class LlamaAttention(nn.Module):
         proj_matrix = fit(
             query_w_shape[0], query_w_shape[1], scale=scale, dist='ternary').to('cuda')
         self.register_buffer('proj_matrix', proj_matrix)
-        w_q = self.q_proj.weight
-        b_q = self.q_proj.bias
-        w_k = self.k_proj.weight
-        b_k = self.k_proj.bias
+        # w_q = self.q_proj.weight
+        # b_q = self.q_proj.bias
+        # w_k = self.k_proj.weight
+        # b_k = self.k_proj.bias
         self.register_parameter('appr_query_w', nn.Parameter(
             torch.randn(int(self.hidden_size * scale), int(self.num_heads * self.head_dim * scale))
             ))
@@ -368,7 +368,7 @@ class LlamaAttention(nn.Module):
             )
             # Add the appr_rotary
             self.appr_rotary_emb = LlamaRotaryEmbedding(
-                int(self.head_dim*0.25),
+                int(self.head_dim*0.25), # TODO: adaptive to the rank
                 max_position_embeddings=self.max_position_embeddings,
                 base=self.rope_theta,
             )
@@ -497,9 +497,7 @@ class LlamaAttention(nn.Module):
                         f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
                     )
             appr_attn = appr_attn + attention_mask
-            logits = appr_attn
-            # print('appr_attn:',appr_attn.shape[-1])
-            # print('kv_seq_len:',kv_seq_len)
+            logits = appr_attn # distill
             if self.en_dst_mask:
                 #print('******dst_ratio is:******', self.dst_ratio)
                 topk_v, _ = torch.topk(appr_attn, int(kv_seq_len* self.dst_ratio), dim=-1)

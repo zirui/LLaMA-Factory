@@ -86,7 +86,7 @@ def run_sft(
         model.dst_activate(init=0.25)
 
     # Load parameters
-    # print("DST: model.load_state_dict; strict=False")
+    print("DST: model.load_state_dict; strict=False")
     checkpoint = model_args.model_name_or_path
     if os.path.isfile(os.path.join(checkpoint, "model.safetensors.index.json")):
         # Load safetensors
